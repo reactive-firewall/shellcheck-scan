@@ -1,0 +1,156 @@
+# action.yml
+# required permissions:
+# actions: read  # optional for extended integration
+# security-events: write  # required to upload SARIF results
+# contents: read # required to perform the scan
+---
+name: 'ShellCheck SARIF Analysis'
+description: 'ShellCheck SARIF Analysis Scan'
+branding:
+  icon: arrow-right
+  color: silver
+inputs:
+  path:
+    description: 'File or directory to run shellcheck on. Default is to use git to match paths'
+    required: false
+    default: 'UNDEFINED'
+  match:
+    description: 'Glob-style pattern of files or directories to match and run shellcheck on. Only works with git tracked files.'
+    required: false
+    default: ['*/*.bash', '*/*.sh']
+  severity:
+    description: 'Report only issues of a given severity level or higher. Can be LOW, MEDIUM or HIGH. Default is UNDEFINED (everything)'
+    required: false
+    default: 'UNDEFINED'
+  shell-format:
+    description: 'Interpret shells as of a given variant. Can be BASH, POSIX, DASH, KSH, or BUSYBOX. Default is automatic.'
+    required: false
+    default: 'AUTOMATIC'
+  repo_token:
+    description: 'Github token of the repository (automatically created by Github)'
+    default: ${{ github.token }}
+    required: true
+  publish-artifacts:
+    description: 'Also upload results for downloading. (Does not affect GitHub scan alerts)'
+    type: boolean
+    default: true
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: "Install ShellCheck Scan dependencies"
+      uses: actions/setup-python@v5
+      id: cp313
+      with:
+        python-version: '3.13'
+        cache: 'pip'  # caching pip dependencies
+        update-environment: false
+      run: |
+        echo '::group::Python-Version'
+        echo '${{ steps.cp313.outputs.python-version }}'
+        echo '::endgroup::'
+        echo '::group:: Install sarif-om'
+        ${{ steps.cp313.outputs.python-path }} -m pip --python '${{ steps.cp313.outputs.python-path }}' install "sarif-om>=1.0.4"
+        echo '::endgroup::'
+
+    - name: "Get Matching Files"
+      id: shellfiles
+      env:
+        GIT_MATCH_PATTERN: ${{ (inputs.path == 'UNDEFINED') && inputs.match || '' }}
+      shell: bash
+      run: |
+        FILES=$(git ls-files --exclude-standard -- ${{ env.GIT_MATCH_PATTERN }} )
+        if [ -z "$FILES" ]; then
+          printf "%s\n" "No matching files found."
+          printf "%s\n" "files=" >> "$GITHUB_OUTPUT"
+        else
+          printf "%s\n" "Matching files found:"
+          printf "%s\n" "$FILES"
+          # Replace line breaks with spaces for GitHub Action Output
+          FILES="${FILES//$'\n'/ }"
+          printf "%s\n" "files=$FILES" >> "$GITHUB_OUTPUT"
+        fi
+      if: ${{ !cancelled() && (inputs.path == 'UNDEFINED') }}
+
+    - name: "Run ShellCheck and Generate SARIF"
+      shell: bash
+      run: |
+        echo "::group::Shellcheck"
+
+        LOWERCASE_SHELL=$(echo $INPUT_SHELL | tr A-Z a-z)
+        case $LOWERCASE_SHELL in
+        bash)
+          echo "::debug::Bourne Again Shell mode selected."  # Easter egg
+          SHELL_TYPE="--shell=bash"
+          ;;
+        sh|posix)
+          echo "::debug::POSIX mode selected."  # Easter egg
+          SHELL_TYPE="--shell=sh"
+          ;;
+        dash)
+          SHELL_TYPE="--shell=dash"
+          ;;
+        busybox|busy-box)
+          echo "::debug::busybox mode is not just normal sh."  # Easter egg
+          SHELL_TYPE="--shell=busybox"
+          ;;
+        busybox|busy-box)
+          echo "::debug::korny? sh. Shh!"  # Easter egg
+          SHELL_TYPE="--shell=busybox"
+          ;;
+        *)
+          echo "::debug::No shell mode selected, will default to attempting to auto-detect."
+          SHELL_TYPE=""
+          ;;
+        esac
+
+        UPPERCASE_SEVERITY=$(echo $INPUT_SEVERITY | tr a-z A-Z)
+        case $UPPERCASE_SEVERITY in
+        STYLE|ALL)
+          echo "::debug::Strict style severity selected."
+          SEVERITY="--severity=style"
+          ;;
+        INFO|DEFAULT)
+          echo "::debug::Info style mode selected."  # Easter egg
+          SEVERITY="--severity=info"
+          ;;
+        WARN|WARNING)
+          SEVERITY="--severity=warning"
+          ;;
+        busybox|busy-box)
+          echo "::debug::korny? sh. Shh!"  # Easter egg
+          SEVERITY="--severity=error"
+          ;;
+        *)
+          SHELL_TYPE="--severity=style"
+          ;;
+        esac
+
+        if [ "$INPUT_PATH" == "UNDEFINED" ]; then
+            INPUT_PATHS="${{ steps.shellfiles.outputs.files }}"
+        else
+            INPUT_PATHS="${INPUT_PATH}"
+        fi
+
+        ${{ steps.cp313.outputs.python-path }} ${{ github.action_path }}/bin/ShellCheckCLI.py $SHELL_TYPE $SEVERITY ${$INPUT_PATHS} --output shellcheck.sarif
+        echo "::endgroup::"
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_SEVERITY: ${{ inputs.severity }}
+        INPUT_SHELL: ${{ inputs.shell-format }}
+      if: ${{ !cancelled() }}
+
+    - name: "Upload artifact"
+      uses: actions/upload-artifact@v4
+      with:
+        name: shellcheck.sarif
+        path: shellcheck.sarif
+        overwrite: true
+      if: ${{ !cancelled() && (inputs.publish-artifacts == true) }}
+
+    - name: "Upload SARIF file"
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: shellcheck.sarif
+      if: ${{ !cancelled() }}
