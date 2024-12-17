@@ -178,7 +178,7 @@ class ShellCheckCLI:
 							)
 						)
 					)
-				)
+				]
 			)
 
 			run.results.append(result)
