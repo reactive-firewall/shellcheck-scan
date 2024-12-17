@@ -7,52 +7,75 @@
 name: 'ShellCheck SARIF Analysis'
 description: 'ShellCheck SARIF Analysis Scan'
 branding:
-  icon: arrow-right
-  color: silver
+  icon: 'code'
+  color: 'silver'
 inputs:
   path:
     description: 'File or directory to run shellcheck on. Default is to use git to match paths'
     required: false
     default: 'UNDEFINED'
   match:
-    description: 'Glob-style pattern of files or directories to match and run shellcheck on. Only works with git tracked files.'
+    description: |
+     Glob-style pattern of files or directories to match and run shellcheck on.
+     Only works with git tracked files.
     required: false
-    default: ['*/*.bash', '*/*.sh']
+    type: string
+    default: '**/*.{bash,sh,command}'
   severity:
-    description: 'Report only issues of a given severity level or higher. Can be LOW, MEDIUM or HIGH. Default is UNDEFINED (everything)'
+    description: |
+      Report only issues of a given severity level or higher. Can be STYLE, INFO, WARNING,
+      or ERROR. Default is UNDEFINED (everything)
     required: false
+    type: choice
+    options:
+      - style
+      - info
+      - warning
+      - error
+      - default
     default: 'UNDEFINED'
   shell-format:
-    description: 'Interpret shells as of a given variant. Can be BASH, POSIX, DASH, KSH, or BUSYBOX. Default is automatic.'
+    description: |
+      Interpret shells as of a given variant. Can be BASH, POSIX, DASH, KSH, or BUSYBOX.
+      Default is automatic.
     required: false
     default: 'AUTOMATIC'
-  repo_token:
-    description: 'Github token of the repository (automatically created by Github)'
-    default: ${{ github.token }}
+  token:
+    description: |
+      The token used to authenticate when fetching Python distributions from
+      https://github.com/actions/python-versions. When running this action on github.com,
+      the default value is sufficient. When running on GHES, you can pass a personal access
+      token for github.com if you are experiencing rate limiting."
+    default: ${{ github.server_url == 'https://github.com' && github.token || '' }}
     required: true
   publish-artifacts:
     description: 'Also upload results for downloading. (Does not affect GitHub scan alerts)'
     type: boolean
     default: true
     required: true
+  secrets: inhereted
 
 runs:
   using: composite
   steps:
-    - name: "Install ShellCheck Scan dependencies"
+    - name: "Setup Python"
       uses: actions/setup-python@v5
       id: cp313
       with:
         python-version: '3.13'
         cache: 'pip'  # caching pip dependencies
         update-environment: false
+    - name: "Install ShellCheck Scan dependencies"
+      env:
+        PYTHON: ${{ steps.cp313.outputs.python-path }}
       run: |
         echo '::group::Python-Version'
         echo '${{ steps.cp313.outputs.python-version }}'
         echo '::endgroup::'
         echo '::group:: Install sarif-om'
-        ${{ steps.cp313.outputs.python-path }} -m pip --python '${{ steps.cp313.outputs.python-path }}' install "sarif-om>=1.0.4"
+        ${PYTHON} -m pip --python '${PYTHON}' install "sarif-om>=1.0.4"
         echo '::endgroup::'
+      if: ${{ !cancelled() && (inputs.path == 'UNDEFINED') }}
 
     - name: "Get Matching Files"
       id: shellfiles
@@ -112,18 +135,19 @@ runs:
           SEVERITY="--severity=style"
           ;;
         INFO|DEFAULT)
-          echo "::debug::Info style mode selected."  # Easter egg
+          echo "::debug::Info mode selected."
           SEVERITY="--severity=info"
           ;;
         WARN|WARNING)
+          echo "::debug::Wranings and Errors mode selected."
           SEVERITY="--severity=warning"
           ;;
-        busybox|busy-box)
-          echo "::debug::korny? sh. Shh!"  # Easter egg
+        ERROR)
+          echo "::debug::Error only mode selected."  # Easter egg
           SEVERITY="--severity=error"
           ;;
         *)
-          SHELL_TYPE="--severity=style"
+          SEVERITY="--severity=style"
           ;;
         esac
 
@@ -133,12 +157,14 @@ runs:
             INPUT_PATHS="${INPUT_PATH}"
         fi
 
-        ${{ steps.cp313.outputs.python-path }} ${{ github.action_path }}/bin/ShellCheckCLI.py $SHELL_TYPE $SEVERITY ${$INPUT_PATHS} --output shellcheck.sarif
+        $PYTHON ${SHELLCHECK_TOOL} $SHELL_TYPE $SEVERITY ${$INPUT_PATHS} --output shellcheck.sarif
         echo "::endgroup::"
       env:
         INPUT_PATH: ${{ inputs.path }}
         INPUT_SEVERITY: ${{ inputs.severity }}
         INPUT_SHELL: ${{ inputs.shell-format }}
+        PYTHON: ${{ steps.cp313.outputs.python-path }}
+        SHELLCHECK_TOOL: "${{ github.action_path }}/bin/ShellCheckCLI.py"
       if: ${{ !cancelled() }}
 
     - name: "Upload artifact"
