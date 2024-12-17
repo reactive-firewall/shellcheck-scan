@@ -63,17 +63,14 @@ runs:
       with:
         python-version: '3.13'
         cache: 'pip'  # caching pip dependencies
-        update-environment: false
     - name: "Install ShellCheck Scan dependencies"
       shell: bash
-      env:
-        PYTHON: ${{ steps.cp313.outputs.python-path }}
       run: |
         echo '::group::Python-Version'
         echo '${{ steps.cp313.outputs.python-version }}'
         echo '::endgroup::'
         echo '::group:: Install sarif-om'
-        ${PYTHON} -m pip --python '${PYTHON}' install "sarif-om>=1.0.4"
+        pip --python ${{ steps.cp313.outputs.python-path }} install -y "sarif-om>=1.0.4" ;
         echo '::endgroup::'
       if: ${{ !cancelled() && (inputs.path == 'UNDEFINED') }}
 
