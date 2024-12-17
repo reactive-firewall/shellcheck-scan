@@ -163,8 +163,10 @@ class ShellCheckCLI:
 				print("")
 			return json.loads(e.stdout)
 
-	def create_fix(self, fix_data: dict) -> sarif.Fix:
+	def create_fix(self, file: str, fix_data: dict) -> sarif.Fix:
 		"""Create a SARIF Fix object from ShellCheck fix data."""
+		if not fix_data:
+			return None
 		return sarif.Fix(
 			description=sarif.Message(
 				text=fix_data.get('replacements', [{}])[0].get('replacement', '')
@@ -172,7 +174,7 @@ class ShellCheckCLI:
 			artifact_changes=[
 				sarif.ArtifactChange(
 					artifact_location=sarif.ArtifactLocation(
-						uri=fix_data.get('file', '')
+						uri=fix_data.get('file', '') if fix_data.get('file', '') else file
 					),
 					replacements=[
 						sarif.Replacement(
@@ -203,12 +205,12 @@ class ShellCheckCLI:
 							name="ShellCheck",
 							version="0.7.2",  # Update to your ShellCheck version
 							information_uri="https://www.shellcheck.net/",
-							rules=[],
-							language=self.SHELL_LANGUAGE_MAP.get(self.shell, "shell")
+							rules=[]
 						)
 					),
+					artifacts=[],
 					results=[],
-					language=self.SHELL_LANGUAGE_MAP.get(self.shell, "shell")
+					default_source_language=self.SHELL_LANGUAGE_MAP.get(self.shell, "shell")
 				)
 			]
 		)
@@ -219,7 +221,8 @@ class ShellCheckCLI:
 
 		for entry in shellcheck_results.get('comments', []):
 			try:
-				code = f"SC{entry['code']}"
+				_index_code = entry.get('code', None)
+				code = f"SC{_index_code}"
 				
 				# Add unique rules to the driver
 				if code not in rule_ids:
@@ -242,6 +245,7 @@ class ShellCheckCLI:
 					)
 					driver.rules.append(rule)
 					rule_ids[code] = rule
+					rule_index = _index_code
 
 				# Create the result object
 				result = sarif.Result(
@@ -259,21 +263,25 @@ class ShellCheckCLI:
 									start_line=entry.get('line', 0),
 									start_column=entry.get('column', 0),
 									end_line=entry.get('endLine', entry.get('line', 0)),
-									end_column=entry.get('endColumn', entry.get('column', 0))
+									end_column=entry.get('endColumn', entry.get('column', 0)),
+									source_language=self.SHELL_LANGUAGE_MAP.get(self.shell, "shell")
 								)
 							)
 						)
-					]
+					],
 				)
 
 				# Add fixes if available
 				if "fix" in entry:
-					result.fixes = [self.create_fix(entry['fix'])]
+					result.fixes = [self.create_fix(entry.get('file', ''), entry.get('fix', None))]
 
 				run.results.append(result)
+				run.artifacts.append(sarif.ArtifactLocation(
+					uri=entry.get('file', '') if entry.get('file', '') else self.FILES
+					))
 
 			except Exception as e:
-				print(f"::warning file={__file__},title='Error processing entry':: {e}")
+				print(f"::warning file={__file__},title='Error processing entry'::Details - {e}")
 				print(entry)
 
 		return sarif_log
