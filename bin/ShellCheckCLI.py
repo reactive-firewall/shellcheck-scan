@@ -99,31 +99,99 @@
 import argparse
 import subprocess
 import json
+import requests
 import sarif_om as sarif
+from typing import Dict, List, Optional
+from urllib.parse import quote
 
 class ShellCheckCLI:
-	def __init__(self, shell, severity, files):
+	SARIF_SCHEMA_URL = str(
+		"https://docs.oasis-open.org/sarif/sarif/v2.1.0/cs01/schemas/sarif-schema-2.1.0.json"
+	)
+
+	SHELL_LANGUAGE_MAP = {
+		"bash": "bash",
+		"sh": "shell",
+		"dash": "shell",
+		"ksh": "ksh",
+		"busybox": "shell"
+	}
+
+	def __init__(self, shell: str, severity: str, files: List[str]):
 		self.shell = shell
 		self.severity = severity
 		self.files = files
+		self.rule_docs_cache: Dict[str, str] = {}
+
+	def fetch_rule_doc(self, code: str) -> Optional[str]:
+		"""Fetch the rule documentation from ShellCheck wiki."""
+		if code in self.rule_docs_cache:
+			return self.rule_docs_cache[code]
+
+		url = f"https://raw.githubusercontent.com/wiki/koalaman/shellcheck/{code}.md"
+		try:
+			response = requests.get(url, timeout=5)
+			if response.status_code == 200:
+				content = response.text
+				# Cache the content for future use
+				self.rule_docs_cache[code] = content
+				return content
+		except requests.RequestException as e:
+			print(f"::warning file={__file__},title='Error fetching rule doc':: {e}")
+		return None
 
 	def run_shellcheck(self):
 		"""Run shellcheck with the specified arguments and return the JSON output."""
 		command = [
-			'shellcheck', f'--shell={self.shell}', f'--severity={self.severity}', '--format=json1'
+			"shellcheck",
+			f"--shell={self.shell}",
+			f"--severity={self.severity}",
+			"--format=json1",
+			"--check-sourced"  # Include sourced files
 		] + self.files
 		try:
 			result = subprocess.run(command, capture_output=True, text=True, check=True)
 			return json.loads(result.stdout)
 		except subprocess.CalledProcessError as e:
-			print(f"::error file={__file__},title='Error running shellcheck':: {e}")
-			return []
+			print(f"::warning file={__file__},title='Error running shellcheck':: {e}")
+			if e.stderr:
+				print(f"::warning file=shellcheck,title='Error from shellcheck':: {e.stderr}")
+				print("")
+			return json.loads(e.stdout)
+
+	def create_fix(self, fix_data: dict) -> sarif.Fix:
+		"""Create a SARIF Fix object from ShellCheck fix data."""
+		return sarif.Fix(
+			description=sarif.Message(
+				text=fix_data.get('replacements', [{}])[0].get('replacement', '')
+			),
+			artifact_changes=[
+				sarif.ArtifactChange(
+					artifact_location=sarif.ArtifactLocation(
+						uri=fix_data.get('file', '')
+					),
+					replacements=[
+						sarif.Replacement(
+							deleted_region=sarif.Region(
+								start_line=fix_data.get('line', 0),
+								start_column=fix_data.get('column', 0),
+								end_line=fix_data.get('endLine', fix_data.get('line', 0)),
+								end_column=fix_data.get('endColumn', fix_data.get('column', 0))
+							),
+							inserted_content=sarif.ArtifactContent(
+								text=repl.get('replacement', '')
+							)
+						) for repl in fix_data.get('replacements', [])
+					]
+				)
+			]
+		)
 
 	def convert_to_sarif(self, shellcheck_results):
 		"""Convert shellcheck JSON results to SARIF format using sarif-om."""
-		# Initialize the SARIF log
 		sarif_log = sarif.SarifLog(
 			version="2.1.0",
+			schema_uri=self.SARIF_SCHEMA_URL,
 			runs=[
 				sarif.Run(
 					tool=sarif.Tool(
@@ -131,73 +199,106 @@ class ShellCheckCLI:
 							name="ShellCheck",
 							version="0.7.2",  # Update to your ShellCheck version
 							information_uri="https://www.shellcheck.net/",
-							rules=[]
+							rules=[],
+							language=self.SHELL_LANGUAGE_MAP.get(self.shell, "shell")
 						)
 					),
-					results=[]
+					results=[],
+					language=self.SHELL_LANGUAGE_MAP.get(self.shell, "shell")
 				)
 			]
 		)
 
 		run = sarif_log.runs[0]
 		driver = run.tool.driver
-
-		# Map to track unique rules
 		rule_ids = {}
 
-		for entry in shellcheck_results:
-			code = f"SC{entry['code']}"  # Prefix with 'SC' to match ShellCheck codes
-			# Add unique rules to the driver
-			if code not in rule_ids:
-				rule = sarif.ReportingDescriptor(
-					id=code,
-					name=code,
-					shortDescription=sarif.MultiformatMessageString(
-						text=entry.get('message', '')
-					),
-					helpUri=f"https://www.shellcheck.net/wiki/{code}"
-				)
-				driver.rules.append(rule)
-				rule_ids[code] = rule
-
-			# Create the result object
-			result = sarif.Result(
-				ruleId=code,
-				message=sarif.Message(
-					text=entry.get('message', '')
-				),
-				locations=[
-					sarif.Location(
-						physicalLocation=sarif.PhysicalLocation(
-							artifactLocation=sarif.ArtifactLocation(
-								uri=entry.get('file', '')
-							),
-							region=sarif.Region(
-								startLine=entry.get('line', 0),
-								startColumn=entry.get('column', 0)
-							)
+		for entry in shellcheck_results.get('comments', []):
+			try:
+				code = f"SC{entry['code']}"
+				
+				# Add unique rules to the driver
+				if code not in rule_ids:
+					# Fetch rule documentation
+					rule_doc = self.fetch_rule_doc(code)
+					
+					rule = sarif.ReportingDescriptor(
+						id=code,
+						name=code,
+						short_description=sarif.MultiformatMessageString(
+							text=entry.get('message', '')
+						),
+						full_description=sarif.MultiformatMessageString(
+							text=rule_doc if rule_doc else entry.get('message', '')
+						),
+						help_uri=f"https://www.shellcheck.net/wiki/{code}",
+						help=sarif.MultiformatMessageString(
+							text=rule_doc if rule_doc else entry.get('message', '')
 						)
 					)
-				]
-			)
+					driver.rules.append(rule)
+					rule_ids[code] = rule
 
-			run.results.append(result)
+				# Create the result object
+				result = sarif.Result(
+					rule_id=code,
+					message=sarif.Message(
+						text=entry.get('message', '')
+					),
+					locations=[
+						sarif.Location(
+							physical_location=sarif.PhysicalLocation(
+								artifact_location=sarif.ArtifactLocation(
+									uri=entry.get('file', '')
+								),
+								region=sarif.Region(
+									start_line=entry.get('line', 0),
+									start_column=entry.get('column', 0),
+									end_line=entry.get('endLine', entry.get('line', 0)),
+									end_column=entry.get('endColumn', entry.get('column', 0))
+								)
+							)
+						)
+					]
+				)
+
+				# Add fixes if available
+				if "fix" in entry:
+					result.fixes = [self.create_fix(entry['fix'])]
+
+				run.results.append(result)
+
+			except Exception as e:
+				print(f"::warning file={__file__},title='Error processing entry':: {e}")
+				print(entry)
 
 		return sarif_log
 
-	def write_sarif(self, file, sarif_log):
+	def write_sarif(self, file: str, sarif_log: sarif.SarifLog):
 		"""Write the SARIF log to a file."""
 		if not file:
 			file = "shellcheck.sarif"
 		with open(file, "w") as sarif_file:
-			json.dump(sarif_log.to_dict(), sarif_file, indent=2)
+			try:
+				# Use serialize() method from sarif-om
+				sarif_json = json.dumps(json.loads(json.dumps(sarif_log, default=lambda o: o.__dict__)), indent=2)
+				sarif_file.write(sarif_json)
+			except Exception as e:
+				print("-"*20)
+				print(sarif_log)
+				print("-"*20)
+				print(f"::error file={__file__},title='Error serializing {file}':: {e}")
+				raise RuntimeError(f"Could not produce output JSON: {e}") from e
 
 def main():
 	parser = argparse.ArgumentParser(description="Run ShellCheck and output results in SARIF format.")
-	parser.add_argument('--shell', choices=['bash', 'sh', 'dash', 'ksh', 'busybox'], default='bash', help='Specify the shell type.')
-	parser.add_argument('--severity', choices=['error', 'warning', 'info', 'style'], default='style', help='Specify the severity level.')
-	parser.add_argument('--output', default='shellcheck.sarif', help='Specify the output SARIF file name.')
-	parser.add_argument('FILES', nargs='+', help='One or more files or glob patterns to check.')
+	parser.add_argument('--shell', choices=['bash', 'sh', 'dash', 'ksh', 'busybox'],
+		default='bash', required=False, help="Specify the shell type.")
+	parser.add_argument('--severity', choices=['error', 'warning', 'info', 'style'],
+		default='style', help="Specify the severity level.")
+	parser.add_argument('--output', default="shellcheck.sarif",
+		help="Specify the output SARIF file name.")
+	parser.add_argument('FILES', nargs='+', help="One or more files or glob patterns to check.")
 
 	args = parser.parse_args()
 
