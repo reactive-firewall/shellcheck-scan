@@ -130,7 +130,7 @@ class ShellCheckCLI:
 						driver=sarif.ToolComponent(
 							name="ShellCheck",
 							version="0.7.2",  # Update to your ShellCheck version
-							informationUri="https://www.shellcheck.net/",
+							information_uri="https://www.shellcheck.net/",
 							rules=[]
 						)
 					),
