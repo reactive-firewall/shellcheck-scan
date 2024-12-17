@@ -16,8 +16,8 @@ inputs:
     default: 'UNDEFINED'
   match:
     description: |
-     Glob-style pattern of files or directories to match and run shellcheck on.
-     Only works with git tracked files.
+      Glob-style pattern of files or directories to match and run shellcheck on.
+      Only works with git tracked files.
     required: false
     type: string
     default: '**/*.{bash,sh,command}'
@@ -26,6 +26,7 @@ inputs:
       Report only issues of a given severity level or higher. Can be STYLE, INFO, WARNING,
       or ERROR. Default is UNDEFINED (everything)
     required: false
+    default: 'style'
     type: choice
     options:
       - style
@@ -33,7 +34,6 @@ inputs:
       - warning
       - error
       - default
-    default: 'UNDEFINED'
   shell-format:
     description: |
       Interpret shells as of a given variant. Can be BASH, POSIX, DASH, KSH, or BUSYBOX.
@@ -53,7 +53,6 @@ inputs:
     type: boolean
     default: true
     required: true
-  secrets: inhereted
 
 runs:
   using: composite
@@ -66,6 +65,7 @@ runs:
         cache: 'pip'  # caching pip dependencies
         update-environment: false
     - name: "Install ShellCheck Scan dependencies"
+      shell: bash
       env:
         PYTHON: ${{ steps.cp313.outputs.python-path }}
       run: |
@@ -130,7 +130,7 @@ runs:
 
         UPPERCASE_SEVERITY=$(echo $INPUT_SEVERITY | tr a-z A-Z)
         case $UPPERCASE_SEVERITY in
-        STYLE|ALL)
+        STYLE|DEFAULT)
           echo "::debug::Strict style severity selected."
           SEVERITY="--severity=style"
           ;;
