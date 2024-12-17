@@ -24,7 +24,7 @@ inputs:
   severity:
     description: |
       Report only issues of a given severity level or higher. Can be STYLE, INFO, WARNING,
-      or ERROR. Default is UNDEFINED (everything)
+      or ERROR. Default is style.
     required: false
     default: 'style'
     type: choice
@@ -157,7 +157,7 @@ runs:
             INPUT_PATHS="${INPUT_PATH}"
         fi
 
-        $PYTHON ${SHELLCHECK_TOOL} $SHELL_TYPE $SEVERITY ${$INPUT_PATHS} --output shellcheck.sarif
+        $PYTHON ${SHELLCHECK_TOOL} $SHELL_TYPE $SEVERITY ${INPUT_PATHS} --output shellcheck.sarif
         echo "::endgroup::"
       env:
         INPUT_PATH: ${{ inputs.path }}
