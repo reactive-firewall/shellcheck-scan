@@ -126,15 +126,19 @@ class ShellCheckCLI:
 	def fetch_rule_doc(self, code: str) -> Optional[str]:
 		"""Fetch the rule documentation from ShellCheck wiki."""
 		if code in self.rule_docs_cache:
+			print(f"::debug::HIT! Fetching rule details from cache.")
 			return self.rule_docs_cache[code]
 
 		url = f"https://raw.githubusercontent.com/wiki/koalaman/shellcheck/{code}.md"
 		try:
+			print(f"::debug::Fetching rule details from '{url}'")
 			response = requests.get(url, timeout=5)
 			if response.status_code == 200:
 				content = response.text
+				print(f"::debug::Fetched rule details successfully. Caching.")
 				# Cache the content for future use
 				self.rule_docs_cache[code] = content
+				print(f"::debug::Fetched rule details and chached successfully.")
 				return content
 		except requests.RequestException as e:
 			print(f"::warning file={__file__},title='Error fetching rule doc':: {e}")
