@@ -299,6 +299,23 @@ class ShellCheckCLI:
 			return [self.remove_none_values(i) for i in d if i is not None]
 		return d
 
+	def toCamelCase(self, snake_str):
+		components = snake_str.split('_')
+		return components[0] + ''.join(x.title() for x in components[1:])
+
+	def convert_dict_keysToCamelCase(self, input_dict):
+		if isinstance(input_dict, dict):
+			newDict = {}
+			for key, value in input_dict.items():
+				newKey = self.toCamelCase(key)
+				new_value = self.convert_dict_keysToCamelCase(value)  # Recursively convert values
+				newDict[newKey] = new_value
+			return newDict
+		elif isinstance(input_dict, list):
+			return [self.convert_dict_keysToCamelCase(item) for item in input_dict]  # Handle lists
+		else:
+			return input_dict  # Return the value if it's not a dictionary
+
 	def write_sarif(self, file: str, sarif_log: sarif.SarifLog):
 		"""Write the SARIF log to a file."""
 		if not file:
@@ -308,7 +325,9 @@ class ShellCheckCLI:
 				buffer_dict = json.loads(json.dumps(sarif_log, default=lambda o: o.__dict__))
 				# Use serialize() method from sarif-om
 				buffer_dict["$schema"] = self.SARIF_SCHEMA_URL
-				sarif_json = json.dumps(self.remove_none_values(buffer_dict), indent=2)
+				sarif_json = json.dumps(self.remove_none_values(
+						self.convert_dict_keysToCamelCase(buffer_dict)
+					), indent=2)
 				sarif_file.write(sarif_json)
 			except Exception as e:
 				print("-"*20)
