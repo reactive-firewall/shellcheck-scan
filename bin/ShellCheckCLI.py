@@ -107,7 +107,7 @@ from urllib.parse import quote
 
 class ShellCheckCLI:
 	SARIF_SCHEMA_URL = str(
-		"https://json.schemastore.org/sarif-2.1.0.json"
+		"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/refs/heads/main/sarif-2.1/schema/sarif-schema-2.1.0.json"
 	)
 
 	SHELL_LANGUAGE_MAP = {
@@ -198,7 +198,6 @@ class ShellCheckCLI:
 		"""Convert shellcheck JSON results to SARIF format using sarif-om."""
 		sarif_log = sarif.SarifLog(
 			version="2.1.0",
-			schema_uri=self.SARIF_SCHEMA_URL,
 			runs=[
 				sarif.Run(
 					tool=sarif.Tool(
@@ -284,7 +283,7 @@ class ShellCheckCLI:
 				run.results.append(result)
 				if file_uri and file_uri not in artifact_uris:
 					artifact_uris.add(file_uri)
-					run.artifacts.append(sarif.ArtifactLocation(uri=uri))
+					run.artifacts.append(sarif.ArtifactLocation(uri=file_uri))
 
 			except Exception as e:
 				print(f"::warning file={__file__},title='Error processing entry'::Details - {e}")
@@ -292,14 +291,24 @@ class ShellCheckCLI:
 
 		return sarif_log
 
+	def remove_none_values(self, d):
+		"""Recursively remove keys with None values from a dictionary."""
+		if isinstance(d, dict):
+			return {k: self.remove_none_values(v) for k, v in d.items() if v is not None}
+		elif isinstance(d, list):
+			return [self.remove_none_values(i) for i in d if i is not None]
+		return d
+
 	def write_sarif(self, file: str, sarif_log: sarif.SarifLog):
 		"""Write the SARIF log to a file."""
 		if not file:
 			file = "shellcheck.sarif"
 		with open(file, "w") as sarif_file:
 			try:
+				buffer_dict = json.loads(json.dumps(sarif_log, default=lambda o: o.__dict__))
 				# Use serialize() method from sarif-om
-				sarif_json = json.dumps(json.loads(json.dumps(sarif_log, default=lambda o: o.__dict__)), indent=2)
+				buffer_dict["$schema"] = self.SARIF_SCHEMA_URL
+				sarif_json = json.dumps(self.remove_none_values(buffer_dict), indent=2)
 				sarif_file.write(sarif_json)
 			except Exception as e:
 				print("-"*20)
