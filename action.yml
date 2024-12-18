@@ -72,6 +72,9 @@ runs:
         echo '::group:: Install sarif-om'
         pip --python ${{ steps.cp313.outputs.python-path }} install "sarif-om>=1.0.4" ;
         echo '::endgroup::'
+        echo '::group:: Install requests'
+        pip --python ${{ steps.cp313.outputs.python-path }} install "requests>=2.32.3" ;
+        echo '::endgroup::'
       if: ${{ !cancelled() && (inputs.path == 'UNDEFINED') }}
 
     - name: "Get Matching Files"
