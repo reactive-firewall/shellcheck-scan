@@ -270,8 +270,8 @@ class ShellCheckCLI:
 							text=rule_doc if rule_doc else entry.get('message', '')
 						)
 					)
-					rule.index=rule_index_mark
 					driver.rules.append(rule)
+					rule.index=rule_index_mark
 					rule_ids[code] = rule
 					rule_index_mark += 1
 
@@ -287,7 +287,7 @@ class ShellCheckCLI:
 					),
 					locations=[
 						sarif.Location(
-							id=int(hash(file_uri)),
+							id=str(file_uri),
 							physical_location=sarif.PhysicalLocation(
 								artifact_location=sarif.ArtifactLocation(
 									index=0,
