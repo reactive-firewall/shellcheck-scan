@@ -137,9 +137,8 @@ class ShellCheckCLI:
 			if response.status_code == 200:
 				content = response.text
 				print(f"::debug::Fetched rule details successfully. Caching.")
-				# Cache the content for future use
 				self.rule_docs_cache[code] = content
-				print(f"::debug::Fetched rule details and chached successfully.")
+				print(f"::debug::Fetched rule details and cached successfully.")
 				return content
 		except requests.RequestException as e:
 			print(f"::warning file={__file__},title='Error fetching rule doc':: {e}")
@@ -164,10 +163,48 @@ class ShellCheckCLI:
 				print("")
 			return json.loads(e.stdout)
 
-	def create_fix(self, file: str, fix_data: dict) -> sarif.Fix:
+	def validate_position(self, value: Optional[int], default: int = 1) -> int:
+		"""Validate and convert position values."""
+		try:
+			val = int(value) if value is not None else default
+			return max(val, default)
+		except (TypeError, ValueError):
+			return default
+
+	def create_region(self, entry: dict) -> sarif.Region:
+		"""Create a valid SARIF region object."""
+		return sarif.Region(
+			start_line=self.validate_position(entry.get('line')),
+			start_column=self.validate_position(entry.get('column')),
+			end_line=self.validate_position(entry.get('endLine')),
+			end_column=self.validate_position(entry.get('endColumn')),
+			char_length=(self.validate_position(entry.get('endColumn')) - self.validate_position(entry.get('column'))) if (self.validate_position(entry.get('line')) == self.validate_position(entry.get('endLine'))) else None
+		)
+
+	def create_fix(self, file: str, fix_data: dict) -> Optional[sarif.Fix]:
 		"""Create a SARIF Fix object from ShellCheck fix data."""
-		if not fix_data:
+		if not fix_data or not fix_data.get('replacements'):
 			return None
+		
+		replacements = []
+		for repl in fix_data.get('replacements', []):
+			if not repl.get('replacement'):
+				continue
+			
+			region = self.create_region(fix_data)
+			
+			replacements.append(
+				sarif.Replacement(
+					deleted_region=region,
+					inserted_content=sarif.ArtifactContent(
+						text=repl.get('replacement', '')
+					)
+				)
+			)
+		
+		if not replacements:
+			return None
+			
 		return sarif.Fix(
 			description=sarif.Message(
 				text=fix_data.get('replacements', [{}])[0].get('replacement', '')
@@ -177,19 +214,7 @@ class ShellCheckCLI:
 					artifact_location=sarif.ArtifactLocation(
 						uri=fix_data.get('file', '') if fix_data.get('file', '') else file
 					),
-					replacements=[
-						sarif.Replacement(
-							deleted_region=sarif.Region(
-								start_line=fix_data.get('line', 0),
-								start_column=fix_data.get('column', 0),
-								end_line=fix_data.get('endLine', fix_data.get('line', 0)),
-								end_column=fix_data.get('endColumn', fix_data.get('column', 0))
-							),
-							inserted_content=sarif.ArtifactContent(
-								text=repl.get('replacement', '')
-							)
-						) for repl in fix_data.get('replacements', [])
-					]
+					replacements=replacements
 				)
 			]
 		)
@@ -218,7 +243,9 @@ class ShellCheckCLI:
 		run = sarif_log.runs[0]
 		driver = run.tool.driver
 		rule_ids = {}
+		rule_index_mark = 0
 		artifact_uris = set()
+		artifact_index_mark = 0
 
 		for entry in shellcheck_results.get('comments', []):
 			try:
@@ -227,7 +254,6 @@ class ShellCheckCLI:
 				
 				# Add unique rules to the driver
 				if code not in rule_ids:
-					# Fetch rule documentation
 					rule_doc = self.fetch_rule_doc(code)
 					
 					rule = sarif.ReportingDescriptor(
@@ -244,34 +270,33 @@ class ShellCheckCLI:
 							text=rule_doc if rule_doc else entry.get('message', '')
 						)
 					)
+					rule.index=rule_index_mark
 					driver.rules.append(rule)
 					rule_ids[code] = rule
-					#  rule_index = _index_code
+					rule_index_mark += 1
 
 				# Normalize file path
 				file_uri = os.path.normpath(entry.get('file', '')).replace(os.sep, '/')
-
+				
 				# Create the result object
 				result = sarif.Result(
 					rule_id=code,
+					rule_index=rule_ids[code].index,
 					message=sarif.Message(
 						text=entry.get('message', '')
 					),
 					locations=[
 						sarif.Location(
+							id=int(hash(file_uri)),
 							physical_location=sarif.PhysicalLocation(
 								artifact_location=sarif.ArtifactLocation(
+									index=0,
 									uri=file_uri
 								),
-								region=sarif.Region(
-									start_line=entry.get('line', 0),
-									start_column=entry.get('column', 0),
-									end_line=entry.get('endLine', entry.get('line', 0)),
-									end_column=entry.get('endColumn', entry.get('column', 0)),
-								)
+								region=self.create_region(entry)
 							)
 						)
-					],
+					]
 				)
 
 				# Add fixes if available
@@ -281,13 +306,16 @@ class ShellCheckCLI:
 						result.fixes = [fix]
 
 				run.results.append(result)
+
+				# Add unique artifacts
 				if file_uri and file_uri not in artifact_uris:
 					artifact_uris.add(file_uri)
 					run.artifacts.append(sarif.Artifact(
-								sarif.ArtifactLocation(uri=file_uri),
-								source_language=self.SHELL_LANGUAGE_MAP.get(self.shell, "shell")
-							)
-						)
+						roles=["analysisTarget"],
+						location=sarif.ArtifactLocation(index=artifact_index_mark, uri=file_uri),
+						source_language=self.SHELL_LANGUAGE_MAP.get(self.shell, "shell")
+					))
+					artifact_index_mark += 1
 
 			except Exception as e:
 				print(f"::warning file={__file__},title='Error processing entry'::Details - {e}")
@@ -309,11 +337,16 @@ class ShellCheckCLI:
 
 	def convert_dict_keysToCamelCase(self, input_dict):
 		if isinstance(input_dict, dict):
+			int_list = [
+				"startLine", "endLine", "startColumn", "endColumn", "byteOffset",
+				"charOffset", "length", "parentIndex"
+			]
+			# "ruleIndex", "rank", "index"
 			newDict = {}
 			for key, value in input_dict.items():
 				newKey = self.toCamelCase(key)
 				# Check if the key is in the specified list and the value is not positive
-				if newKey in ["startLine", "endLine", "startColumn", "endColumn", "byteOffset", "charOffset", "length", "parentIndex"] and (value < 1):
+				if newKey in int_list and (value < 1):
 					continue  # Skip this key-value pair
 				new_value = self.convert_dict_keysToCamelCase(value)  # Recursively convert values
 				newDict[newKey] = new_value
@@ -329,17 +362,16 @@ class ShellCheckCLI:
 			file = "shellcheck.sarif"
 		with open(file, "w") as sarif_file:
 			try:
-				buffer_dict = json.loads(json.dumps(sarif_log, default=lambda o: o.__dict__))
-				# Use serialize() method from sarif-om
-				buffer_dict["$schema"] = self.SARIF_SCHEMA_URL
-				sarif_json = json.dumps(self.remove_none_values(
-						self.convert_dict_keysToCamelCase(buffer_dict)
-					), indent=2)
-				sarif_file.write(sarif_json)
+				# Convert to dict and add schema
+				sarif_dict = json.loads(json.dumps(sarif_log, default=lambda o: o.__dict__))
+				sarif_dict["$schema"] = self.SARIF_SCHEMA_URL
+				
+				# Clean up the dictionary
+				sarif_dict = self.remove_none_values(self.convert_dict_keysToCamelCase(sarif_dict))
+				
+				# Write to file
+				json.dump(sarif_dict, sarif_file, indent=2)
 			except Exception as e:
-				print("-"*20)
-				print(sarif_log)
-				print("-"*20)
 				print(f"::error file={__file__},title='Error serializing {file}':: {e}")
 				raise RuntimeError(f"Could not produce output JSON: {e}") from e
 
