@@ -106,7 +106,7 @@ from urllib.parse import quote
 
 class ShellCheckCLI:
 	SARIF_SCHEMA_URL = str(
-		"https://docs.oasis-open.org/sarif/sarif/v2.1.0/cs01/schemas/sarif-schema-2.1.0.json"
+		"https://json.schemastore.org/sarif-2.1.0.json"
 	)
 
 	SHELL_LANGUAGE_MAP = {
@@ -218,6 +218,7 @@ class ShellCheckCLI:
 		run = sarif_log.runs[0]
 		driver = run.tool.driver
 		rule_ids = {}
+		artifact_uris = set()
 
 		for entry in shellcheck_results.get('comments', []):
 			try:
@@ -245,7 +246,10 @@ class ShellCheckCLI:
 					)
 					driver.rules.append(rule)
 					rule_ids[code] = rule
-					rule_index = _index_code
+					#  rule_index = _index_code
+
+				# Normalize file path
+				file_uri = os.path.normpath(entry.get('file', '')).replace(os.sep, '/')
 
 				# Create the result object
 				result = sarif.Result(
@@ -257,14 +261,13 @@ class ShellCheckCLI:
 						sarif.Location(
 							physical_location=sarif.PhysicalLocation(
 								artifact_location=sarif.ArtifactLocation(
-									uri=entry.get('file', '')
+									uri=file_uri
 								),
 								region=sarif.Region(
 									start_line=entry.get('line', 0),
 									start_column=entry.get('column', 0),
 									end_line=entry.get('endLine', entry.get('line', 0)),
 									end_column=entry.get('endColumn', entry.get('column', 0)),
-									source_language=self.SHELL_LANGUAGE_MAP.get(self.shell, "shell")
 								)
 							)
 						)
@@ -273,12 +276,14 @@ class ShellCheckCLI:
 
 				# Add fixes if available
 				if "fix" in entry:
-					result.fixes = [self.create_fix(entry.get('file', ''), entry.get('fix', None))]
+					fix = self.create_fix(file_uri, entry.get('fix', None))
+					if fix:
+						result.fixes = [fix]
 
 				run.results.append(result)
-				run.artifacts.append(sarif.ArtifactLocation(
-					uri=entry.get('file', '') if entry.get('file', '') else self.FILES
-					))
+				if file_uri and file_uri not in artifact_uris:
+					artifact_uris.add(file_uri)
+					run.artifacts.append(sarif.ArtifactLocation(uri=uri))
 
 			except Exception as e:
 				print(f"::warning file={__file__},title='Error processing entry'::Details - {e}")
