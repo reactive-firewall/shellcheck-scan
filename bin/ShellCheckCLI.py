@@ -283,7 +283,11 @@ class ShellCheckCLI:
 				run.results.append(result)
 				if file_uri and file_uri not in artifact_uris:
 					artifact_uris.add(file_uri)
-					run.artifacts.append(sarif.ArtifactLocation(uri=file_uri))
+					run.artifacts.append(sarif.Artifact(
+								sarif.ArtifactLocation(uri=file_uri),
+								source_language=self.SHELL_LANGUAGE_MAP.get(self.shell, "shell")
+							)
+						)
 
 			except Exception as e:
 				print(f"::warning file={__file__},title='Error processing entry'::Details - {e}")
@@ -308,6 +312,9 @@ class ShellCheckCLI:
 			newDict = {}
 			for key, value in input_dict.items():
 				newKey = self.toCamelCase(key)
+				# Check if the key is in the specified list and the value is not positive
+				if newKey in ["startLine", "endLine", "startColumn", "endColumn", "byteOffset", "charOffset", "length", "parentIndex"] and (value < 1):
+					continue  # Skip this key-value pair
 				new_value = self.convert_dict_keysToCamelCase(value)  # Recursively convert values
 				newDict[newKey] = new_value
 			return newDict
