@@ -96,6 +96,7 @@
 #    even if the above stated remedy fails of its essential purpose.
 ################################################################################
 
+import hashlib
 import os
 import argparse
 import subprocess
@@ -212,12 +213,21 @@ class ShellCheckCLI:
 			artifact_changes=[
 				sarif.ArtifactChange(
 					artifact_location=sarif.ArtifactLocation(
+						index=0,
 						uri=fix_data.get('file', '') if fix_data.get('file', '') else file
 					),
 					replacements=replacements
 				)
 			]
 		)
+
+	def create_id(self, file: str) -> int:
+		# Create a SHA-256 hash object
+		sha256_hash = hashlib.sha256()
+		# Update the hash object with the normalized path encoded to bytes
+		sha256_hash.update(file.encode('utf-8'))
+		# Convert the hexadecimal digest to an integer
+		return int(sha256_hash.hexdigest(), 16)
 
 	def convert_to_sarif(self, shellcheck_results):
 		"""Convert shellcheck JSON results to SARIF format using sarif-om."""
@@ -243,7 +253,6 @@ class ShellCheckCLI:
 		run = sarif_log.runs[0]
 		driver = run.tool.driver
 		rule_ids = {}
-		rule_index_mark = 0
 		artifact_uris = set()
 		artifact_index_mark = 0
 
@@ -271,9 +280,7 @@ class ShellCheckCLI:
 						)
 					)
 					driver.rules.append(rule)
-					rule.index=rule_index_mark
 					rule_ids[code] = rule
-					rule_index_mark += 1
 
 				# Normalize file path
 				file_uri = os.path.normpath(entry.get('file', '')).replace(os.sep, '/')
@@ -281,13 +288,13 @@ class ShellCheckCLI:
 				# Create the result object
 				result = sarif.Result(
 					rule_id=code,
-					rule_index=rule_ids[code].index,
+					rule_index=next((i for i, deRule in enumerate(driver.rules) if deRule == rule), None),
 					message=sarif.Message(
 						text=entry.get('message', '')
 					),
 					locations=[
 						sarif.Location(
-							id=str(file_uri),
+							id=self.create_id(file_uri),
 							physical_location=sarif.PhysicalLocation(
 								artifact_location=sarif.ArtifactLocation(
 									index=0,
