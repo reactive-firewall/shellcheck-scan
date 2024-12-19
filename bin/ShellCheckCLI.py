@@ -227,7 +227,9 @@ class ShellCheckCLI:
 		# Update the hash object with the normalized path encoded to bytes
 		sha256_hash.update(file.encode('utf-8'))
 		# Convert the hexadecimal digest to an integer
-		return int(sha256_hash.hexdigest(), 16)
+		id_value = int(sha256_hash.hexdigest(), 16)
+		# Limit the ID to a 64-bit unsigned integer
+		return id_value % (2**64)
 
 	def convert_to_sarif(self, shellcheck_results):
 		"""Convert shellcheck JSON results to SARIF format using sarif-om."""
