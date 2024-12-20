@@ -222,14 +222,16 @@ class ShellCheckCLI:
 		)
 
 	def create_id(self, file: str) -> int:
+		"""Create a unique ID for a location that fits within int32 range."""
 		# Create a SHA-256 hash object
 		sha256_hash = hashlib.sha256()
 		# Update the hash object with the normalized path encoded to bytes
 		sha256_hash.update(file.encode('utf-8'))
-		# Convert the hexadecimal digest to an integer
-		id_value = int(sha256_hash.hexdigest(), 16)
-		# Limit the ID to a 64-bit unsigned integer
-		return id_value % (2**64)
+		# Get first 4 bytes of the hash and convert to int
+		# This ensures the ID is always within int32 range (0 to 2^31-1)
+		id_bytes = sha256_hash.digest()[:4]
+		id_value = int.from_bytes(id_bytes, byteorder='big') & 0x7fffffff
+		return id_value
 
 	def convert_to_sarif(self, shellcheck_results):
 		"""Convert shellcheck JSON results to SARIF format using sarif-om."""
