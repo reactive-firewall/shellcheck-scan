@@ -233,6 +233,27 @@ class ShellCheckCLI:
 		id_value = int.from_bytes(id_bytes, byteorder='big') & 0x7fffffff
 		return id_value
 
+	def compact_json_output(self, data):
+		# Convert the data to a compact JSON string
+		return json.dumps(data, indent=None, separators=(',', ':'), sort_keys=True)
+
+	def generate_fingerprint(self, data):
+		# Use compact JSON output for fingerprint generation
+		data_string = self.compact_json_output(data)
+		
+		# Create a SHA-256 hash of the data string
+		fingerprint = hashlib.sha256(data_string.encode('utf-8')).hexdigest()
+		
+		return fingerprint
+
+	def generate_partial_fingerprint(self, rule_id, message):
+		# Create a compact tuple for partial fingerprint generation
+		partial_data = {
+			"ruleId": rule_id.strip(),  # Normalize by stripping whitespace
+			"message": message.get("text").strip()   # Normalize by stripping whitespace
+		}
+		return self.generate_fingerprint(partial_data)
+
 	def convert_to_sarif(self, shellcheck_results):
 		"""Convert shellcheck JSON results to SARIF format using sarif-om."""
 		sarif_log = sarif.SarifLog(
@@ -367,6 +388,37 @@ class ShellCheckCLI:
 		else:
 			return input_dict  # Return the value if it's not a dictionary
 
+	def add_fingerprints_to_sarif(self, sarif_data):
+		# Iterate over each run in the SARIF data
+		for run in sarif_data.get("runs", []):
+			# Iterate over each result in the current run
+			for result in run.get("results", []):
+				# Check if there is at least one location
+				locations = result.get("locations")
+				if locations and len(locations) > 0:
+					# Create a dictionary with relevant fields for fingerprint generation
+					finding_data = {
+						"ruleId": result.get("ruleId").strip(),  # Normalize by stripping whitespace
+						"message": result.get("message").get("text").strip(),  # Normalize by stripping whitespace
+						"location": locations[0]  # Use the first location
+					}
+					
+					# Generate the full fingerprint
+					fingerprint = self.generate_fingerprint(finding_data)
+					
+					# Generate the partial fingerprint
+					partial_fingerprint = self.generate_partial_fingerprint(
+						result.get("ruleId"), result.get("message")
+					)
+					
+					# Add the fingerprints to the result
+					result["fingerprint"] = fingerprint
+					result["partialFingerprints"] = [partial_fingerprint]  # Store as a list
+				# If there are no locations, skip adding fingerprints
+				else:
+					continue  # Skip this result
+		return sarif_data
+
 	def write_sarif(self, file: str, sarif_log: sarif.SarifLog):
 		"""Write the SARIF log to a file."""
 		if not file:
@@ -379,6 +431,7 @@ class ShellCheckCLI:
 				
 				# Clean up the dictionary
 				sarif_dict = self.remove_none_values(self.convert_dict_keysToCamelCase(sarif_dict))
+				sarif_dict = self.add_fingerprints_to_sarif(sarif_dict)
 				
 				# Write to file
 				json.dump(sarif_dict, sarif_file, indent=2)
