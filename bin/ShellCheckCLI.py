@@ -237,20 +237,37 @@ class ShellCheckCLI:
 		# Convert the data to a compact JSON string
 		return json.dumps(data, indent=None, separators=(',', ':'), sort_keys=True)
 
-	def generate_fingerprint(self, data):
-		# Use compact JSON output for fingerprint generation
-		data_string = self.compact_json_output(data)
-		
+	def generate_weak_fingerprint(self, data):
+		"""Generate a unstable fingerprint from the provided data."""
+		# Remove any None values and normalize the data structure
+		cleaned_data = self.remove_none_values(data)
+		# Convert to a stable string representation
+		data_string = self.compact_json_output(cleaned_data)
 		# Create a SHA-256 hash of the data string
-		fingerprint = hashlib.sha256(data_string.encode('utf-8')).hexdigest()
-		
-		return fingerprint
+		return hashlib.sha1(data_string.encode('utf-8')).hexdigest()
+
+	def generate_partial_weak_fingerprint(self, rule_id, message):
+		"""Generate a partial fingerprint from rule ID and message."""
+		partial_data = {
+			"ruleId": rule_id.strip() if rule_id else "",
+			"message": message.get("text", "").strip()
+		}
+		return self.generate_weak_fingerprint(partial_data)
+
+	def generate_fingerprint(self, data):
+		"""Generate a stable fingerprint from the provided data."""
+		# Remove any None values and normalize the data structure
+		cleaned_data = self.remove_none_values(data)
+		# Convert to a stable string representation
+		data_string = self.compact_json_output(cleaned_data)
+		# Create a SHA-256 hash of the data string
+		return hashlib.sha256(data_string.encode('utf-8')).hexdigest()
 
 	def generate_partial_fingerprint(self, rule_id, message):
-		# Create a compact tuple for partial fingerprint generation
+		"""Generate a partial fingerprint from rule ID and message."""
 		partial_data = {
-			"ruleId": rule_id.strip(),  # Normalize by stripping whitespace
-			"message": message.get("text").strip()   # Normalize by stripping whitespace
+			"ruleId": rule_id.strip() if rule_id else "",
+			"message": message.get("text", "").strip()
 		}
 		return self.generate_fingerprint(partial_data)
 
@@ -389,6 +406,7 @@ class ShellCheckCLI:
 			return input_dict  # Return the value if it's not a dictionary
 
 	def add_fingerprints_to_sarif(self, sarif_data):
+		"""Add fingerprints to SARIF results following the SARIF 2.1.0 specification."""
 		# Iterate over each run in the SARIF data
 		for run in sarif_data.get("runs", []):
 			# Iterate over each result in the current run
@@ -398,25 +416,26 @@ class ShellCheckCLI:
 				if locations and len(locations) > 0:
 					# Create a dictionary with relevant fields for fingerprint generation
 					finding_data = {
-						"ruleId": result.get("ruleId").strip(),  # Normalize by stripping whitespace
-						"message": result.get("message").get("text").strip(),  # Normalize by stripping whitespace
-						"location": locations[0]  # Use the first location
+						"ruleId": result.get("ruleId", "").strip(),
+						"message": result.get("message", {}).get("text", "").strip(),
+						"location": locations[0]
 					}
-					
-					# Generate the full fingerprint
-					fingerprint = self.generate_fingerprint(finding_data)
-					
-					# Generate the partial fingerprint
-					partial_fingerprint = self.generate_partial_fingerprint(
-						result.get("ruleId"), result.get("message")
-					)
-					
-					# Add the fingerprints to the result
-					result["fingerprint"] = fingerprint
-					result["partialFingerprints"] = [partial_fingerprint]  # Store as a list
-				# If there are no locations, skip adding fingerprints
-				else:
-					continue  # Skip this result
+					# Generate fingerprints as key-value pairs
+					result["fingerprints"] = {
+						"SHA256": self.generate_fingerprint(finding_data),
+						"SHA1": self.generate_weak_fingerprint(finding_data)
+					}
+					# Generate partial fingerprints as key-value pairs
+					result["partialFingerprints"] = {
+						"ruleMessageFingerprint/SHA256": self.generate_partial_fingerprint(
+							result.get("ruleId", ""),
+							result.get("message", {})
+						),
+						"ruleMessageFingerprint/SHA1": self.generate_partial_weak_fingerprint(
+							result.get("ruleId", ""),
+							result.get("message", {})
+						)
+					}
 		return sarif_data
 
 	def write_sarif(self, file: str, sarif_log: sarif.SarifLog):
