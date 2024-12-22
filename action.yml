@@ -76,18 +76,34 @@ runs:
       with:
         python-version: '3.13'
         cache: 'pip'  # caching pip dependencies
+    - name: "Install ShellCheck (macOS)"
+      id: macos-must-use-brew
+      if: ${{ !cancelled() && runner.os == 'macOS' }}
+      shell: bash
+      run: |
+        printf "%s\n" "::debug::macOS runner detected."
+        printf "%s\n" "::debug::Will need to use brew to install shellcheck."
+        printf "%s\n" "::group:: Brew"
+        brew install shellcheck
+        printf "%s\n" "::endgroup::"
+    - name: "Install ShellCheck (Windows)"
+      if: ${{ !cancelled() && runner.os == 'Windows' }}
+      id: windows-must-use-choco
+      shell: pwsh
+      run: |
+        choco install -y shellcheck
     - name: "Install ShellCheck Scan dependencies"
       shell: bash
       run: |
-        echo '::group::Python-Version'
-        echo '${{ steps.cp313.outputs.python-version }}'
-        echo '::endgroup::'
-        echo '::group:: Install sarif-om'
-        pip --python ${{ steps.cp313.outputs.python-path }} install "sarif-om>=1.0.4" ;
-        echo '::endgroup::'
-        echo '::group:: Install requests'
-        pip --python ${{ steps.cp313.outputs.python-path }} install "requests>=2.32.3" ;
-        echo '::endgroup::'
+        printf "%s\n" "::group::Python-Version"
+        printf "%s\n" "${{ steps.cp313.outputs.python-version }}"
+        printf "%s\n" "::endgroup::"
+        printf "%s\n" "::group:: Install sarif-om"
+        pip --python ${{ steps.cp313.outputs.python-path }} --no-input install "sarif-om>=1.0.4" ;
+        printf "%s\n" "::endgroup::"
+        printf "%s\n" "::group:: Install requests"
+        pip --python ${{ steps.cp313.outputs.python-path }} --no-input install "requests>=2.32.3" ;
+        printf "%s\n" "::endgroup::"
       if: ${{ !cancelled() }}
 
     - name: "Get Matching Files"
