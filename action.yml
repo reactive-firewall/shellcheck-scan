@@ -45,7 +45,7 @@ inputs:
       The token used to authenticate when fetching Python distributions from
       https://github.com/actions/python-versions. When running this action on github.com,
       the default value is sufficient. When running on GHES, you can pass a personal access
-      token for github.com if you are experiencing rate limiting."
+      token for github.com if you are experiencing rate limiting.
     default: ${{ github.server_url == 'https://github.com' && github.token || '' }}
     required: true
   publish-artifacts:
@@ -53,6 +53,19 @@ inputs:
     type: boolean
     default: true
     required: true
+outputs:
+  python-version:
+    description: "The python version that was used in the run."
+    value: ${{ steps.cp313.outputs.python-version || '' }}
+  artifact-id:
+    description: "The uploaded artifact-id"
+    value: ${{ steps.artifact-upload-step.outputs.artifact-id }}
+  artifact-url:
+    description: "The uploaded artifact-url"
+    value: ${{ steps.artifact-upload-step.outputs.artifact-url }}
+  artifact-digest:
+    description: "The uploaded artifact-digest"
+    value: ${{ steps.artifact-upload-step.outputs.artifact-digest }}
 
 runs:
   using: composite
@@ -75,7 +88,7 @@ runs:
         echo '::group:: Install requests'
         pip --python ${{ steps.cp313.outputs.python-path }} install "requests>=2.32.3" ;
         echo '::endgroup::'
-      if: ${{ !cancelled() && (inputs.path == 'UNDEFINED') }}
+      if: ${{ !cancelled() }}
 
     - name: "Get Matching Files"
       id: shellfiles
@@ -169,11 +182,14 @@ runs:
 
     - name: "Upload artifact"
       uses: actions/upload-artifact@v4
+      id: artifact-upload-step
       with:
         name: shellcheck.sarif
         path: shellcheck.sarif
         overwrite: true
-      if: ${{ !cancelled() && (inputs.publish-artifacts == true) }}
+        if-no-files-found: warn
+        compression-level: 1  # don't waist time
+      if: ${{ !cancelled() && (inputs.publish-artifacts == 'true') }}  # testing
 
     - name: "Upload SARIF file"
       uses: github/codeql-action/upload-sarif@v3
