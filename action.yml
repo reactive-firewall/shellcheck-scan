@@ -104,7 +104,16 @@ runs:
         printf "%s\n" "::group:: Install requests"
         pip --python ${{ steps.cp313.outputs.python-path }} --no-input install "requests>=2.32.3" ;
         printf "%s\n" "::endgroup::"
-      if: ${{ !cancelled() }}
+      if: ${{ !cancelled() && runner.os != 'Windows' }}
+
+    - name: "Install ShellCheck Scan dependencies (Windows)"
+      shell: bash
+      run: |
+        printf "%s\n" "::group:: Install via pip if Windows works (Experemental)"
+        pip --no-input install "sarif-om>=1.0.4"
+        pip --no-input install "requests>=2.32.3"
+        printf "%s\n" "::endgroup::"
+      if: ${{ !cancelled() && runner.os == 'Windows' }}
 
     - name: "Get Matching Files"
       id: shellfiles
