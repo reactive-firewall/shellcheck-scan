@@ -26,14 +26,15 @@ This action depends on:
 
 ## Usage
 
-Add the following to your GitHub Actions workflow:
+Add the following step to your workflow (most inputs are optional):
 
 ```yaml
 - name: Run ShellCheck Analysis
   uses: reactive-firewall/shellcheck-scan@v1
   with:
-    # Optional: Specify paths to scan (defaults to git-tracked shell scripts)
-    path: 'scripts/'
+    # Optional: Specify exact path to scan (advanced feature)
+    # To use a specific file, uncomment and set:
+    path: '${{ github.workspace }}/downloads/my-artifact.bash'
     
     # Optional: Custom glob pattern for matching files
     match: '**/*.{sh,bash,ksh}'
@@ -43,13 +44,16 @@ Add the following to your GitHub Actions workflow:
     
     # Optional: Specify shell dialect (bash, sh, dash, ksh, busybox)
     shell-format: 'bash'
+
+    # Optional: Set to true to upload scan results as artifacts
+    publish-artifacts: true
 ```
 
 ## Inputs
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `path` | File or directory to scan | No | Auto-detected |
+| `path` | Exact file path to scan | No | Auto-detected |
 | `match` | Glob pattern for matching files | No | `**/*.{bash,sh,command}` |
 | `severity` | Minimum severity level | No | `style` |
 | `shell-format` | Shell dialect to use | No | `AUTOMATIC` |
@@ -83,12 +87,43 @@ jobs:
       - uses: reactive-firewall/shellcheck-scan@v1
 ```
 
+### Full Usage
+
+```yaml
+# .github/workflows/shellcheck.yml
+---
+name: shellcheck
+on: [push, pull_request]
+
+permissions: {}  # Setting default permissions to none for enhanced security
+
+jobs:
+  shellcheck:
+    permissions:
+      contents: read  # for actions/checkout to fetch code
+      pull_requests: read  # to get PR metadata
+      security-events: write  # for github/codeql-action/upload-sarif to upload SARIF results
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: true
+      - name: Shellcheck Scan
+        uses: reactive-firewall/shellcheck-scan@v1
+        with:  # optional arguments
+          match: 'scripts/* **/*.sh'
+          publish-artifacts: false
+        if: ${{ success() }}
+```
+
 ### Custom Configuration
 
 ```yaml
 - uses: reactive-firewall/shellcheck-scan@v1
   with:
-    path: 'scripts/'
     severity: 'warning'
     shell-format: 'bash'
     match: '**/*.bash'
@@ -108,4 +143,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 If you encounter any problems, please file an issue along with a detailed description.
 
 ---
-Last Updated: 2024-12-21
+Last Updated: 2025-04-28
