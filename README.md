@@ -33,7 +33,8 @@ Add the following to your GitHub Actions workflow (most inputs are optional):
   uses: reactive-firewall/shellcheck-scan@v1
   with:
     # Optional: Specify exact path to scan (advanced feature)
-    # path: '${{ github.workspace }}/downloads/my-artifact.bash'
+    # To use a specific file, uncomment and set:
+    path: '${{ github.workspace }}/downloads/my-artifact.bash'
     
     # Optional: Custom glob pattern for matching files
     match: '**/*.{sh,bash,ksh}'
@@ -44,7 +45,7 @@ Add the following to your GitHub Actions workflow (most inputs are optional):
     # Optional: Specify shell dialect (bash, sh, dash, ksh, busybox)
     shell-format: 'bash'
     
-    # required
+    # Required input: enable to upload scan results as artifacts
     publish-artifacts: true
 ```
 
@@ -86,8 +87,7 @@ jobs:
       - uses: reactive-firewall/shellcheck-scan@v1
 ```
 
-### Full Usege
-
+### Full Usage
 ```yaml
 # .github/workflows/shellcheck.yml
 ---
@@ -127,8 +127,6 @@ jobs:
     shell-format: 'bash'
     match: '**/*.bash'
 ```
-
-
 
 ## License
 

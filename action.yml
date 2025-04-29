@@ -13,7 +13,7 @@ inputs:
   path:
     description: |
       File path to run shellcheck on. Default behavior is to use git to match tracked
-      paths dynamicly. Use 'path' to scan files not tracked by git in the workspace.
+      paths dynamically. Use 'path' to scan files not tracked by Git in the workspace.
       Mutually exclusive with 'match', if both are supplied, only 'path' will be used.
     required: false
     default: 'UNDEFINED'
@@ -22,8 +22,8 @@ inputs:
       Glob-style pattern of files or directories to match and run shellcheck on.
       Only works with git tracked files.
       Mutually exclusive with 'path', if both are supplied, only 'path' will be used.
-      If neither 'match' nor 'path' is supplied, Default behavior is to use git to match
-      tracked paths dynamicly.
+      If neither 'match' nor 'path' is supplied, the default behavior is to use git to match
+      tracked paths dynamically.
     required: false
     type: string
     default: '**/*.{bash,sh,command}'
@@ -198,7 +198,7 @@ runs:
         if [ "$INPUT_PATH" == "UNDEFINED" ]; then
             INPUT_PATHS="${{ steps.shellfiles.outputs.files }}"
         else
-            echo "::debug::Overridding dynamic behavior and passing path value directly."
+            echo "::debug::Overriding dynamic behavior and passing path value directly."
             INPUT_PATHS="${INPUT_PATH}"
         fi
 
