@@ -26,7 +26,7 @@ This action depends on:
 
 ## Usage
 
-Add the following to your GitHub Actions workflow (most inputs are optional):
+Add the following step to your workflow (most inputs are optional):
 
 ```yaml
 - name: Run ShellCheck Analysis
@@ -44,8 +44,8 @@ Add the following to your GitHub Actions workflow (most inputs are optional):
     
     # Optional: Specify shell dialect (bash, sh, dash, ksh, busybox)
     shell-format: 'bash'
-    
-    # Required input: enable to upload scan results as artifacts
+
+    # Optional: Set to true to upload scan results as artifacts
     publish-artifacts: true
 ```
 
@@ -101,7 +101,7 @@ jobs:
   shellcheck:
     permissions:
       contents: read  # for actions/checkout to fetch code
-      pull-requests: read  # to get PR metadata
+      pull_requests: read  # to get PR metadata
       security-events: write  # for github/codeql-action/upload-sarif to upload SARIF results
 
     runs-on: ubuntu-latest
