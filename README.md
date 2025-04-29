@@ -88,6 +88,7 @@ jobs:
 ```
 
 ### Full Usage
+
 ```yaml
 # .github/workflows/shellcheck.yml
 ---
