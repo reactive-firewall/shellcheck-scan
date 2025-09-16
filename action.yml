@@ -77,7 +77,7 @@ runs:
   using: composite
   steps:
     - name: "Setup Python"
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       id: cp313
       with:
         python-version: '3.13'
