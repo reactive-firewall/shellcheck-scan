@@ -8,7 +8,7 @@ name: 'ShellCheck SARIF Analysis'
 description: 'ShellCheck SARIF Analysis Scan'
 branding:
   icon: 'code'
-  color: 'silver'
+  color: 'yellow'
 inputs:
   path:
     description: |
