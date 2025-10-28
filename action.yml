@@ -213,7 +213,7 @@ runs:
       if: ${{ !cancelled() }}
 
     - name: "Upload artifact"
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       id: artifact-upload-step
       with:
         name: shellcheck.sarif
