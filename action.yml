@@ -1,6 +1,7 @@
 # action.yml
 # required permissions:
 # actions: read  # optional for extended integration
+# artifact_metadata: write # required to optionally upload results for downloading (configurable)
 # security-events: write  # required to upload SARIF results
 # contents: read # required to perform the scan
 ---
@@ -64,8 +65,8 @@ outputs:
     description: "The python version that was used in the run."
     value: ${{ steps.cp313.outputs.python-version || '' }}
   sarif-id:
-    description: "The ID of the uploaded Code Scanning SARIF file, if any."
-    value: ${{ steps.sarif-upload-step.outputs.sarif-id }}
+    description: "The ID of the uploaded Code Scanning SARIF file, if any, otherwise null."
+    value: ${{ steps.sarif-upload-step.outputs.sarif-id || null }}
   artifact-id:
     description: "The uploaded artifact-id"
     value: ${{ steps.artifact-upload-step.outputs.artifact-id }}
@@ -112,14 +113,14 @@ runs:
         pip --python ${{ steps.cp313.outputs.python-path }} --no-input install "sarif-om>=1.0.4" ;
         printf "%s\n" "::endgroup::"
         printf "%s\n" "::group:: Install requests"
-        pip --python ${{ steps.cp313.outputs.python-path }} --no-input install "requests>=2.32.3" ;
+        pip --python ${{ steps.cp313.outputs.python-path }} --no-input install "requests>=2.32.5" ;
         printf "%s\n" "::endgroup::"
       if: ${{ !cancelled() && runner.os != 'Windows' }}
 
     - name: "Install ShellCheck Scan dependencies (Windows)"
       shell: bash
       run: |
-        printf "%s\n" "::group:: Install via pip if Windows works (Experemental)"
+        printf "%s\n" "::group:: Install via pip if Windows works (Experimental)"
         pip --no-input install "sarif-om>=1.0.4"
         pip --no-input install "requests>=2.32.5"
         printf "%s\n" "::endgroup::"
@@ -235,6 +236,6 @@ runs:
       uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: shellcheck.sarif
-        token: ${{ github.token }}
+        token: ${{ github.token }}  # i.e. use runner token to match GitHub instance in GHES
         category: 'shellcheck-scan'
       if: ${{ !cancelled() }}
