@@ -42,7 +42,7 @@ inputs:
       - default
   shell-format:
     description: |
-      Interpret shells as of a given variant. Can be BASH, POSIX, DASH, KSH, or BUSYBOX.
+      Interpret shells as of a given variant. Can be BASH, POSIX, DASH, ASH, or BUSYBOX.
       Default is automatic.
     required: false
     default: 'AUTOMATIC'
@@ -63,6 +63,9 @@ outputs:
   python-version:
     description: "The python version that was used in the run."
     value: ${{ steps.cp313.outputs.python-version || '' }}
+  sarif-id:
+    description: "The ID of the uploaded Code Scanning SARIF file, if any."
+    value: ${{ steps.sarif-upload-step.outputs.sarif-id }}
   artifact-id:
     description: "The uploaded artifact-id"
     value: ${{ steps.artifact-upload-step.outputs.artifact-id }}
@@ -82,6 +85,7 @@ runs:
       with:
         python-version: '3.13'
         cache: 'pip'  # caching pip dependencies
+        token: ${{ inputs.token }}
     - name: "Install ShellCheck (macOS)"
       id: macos-must-use-brew
       if: ${{ !cancelled() && runner.os == 'macOS' }}
@@ -158,13 +162,16 @@ runs:
         dash)
           SHELL_TYPE="--shell=dash"
           ;;
+        ash)
+          SHELL_TYPE="--shell=ash"  # requires tool version 3+ (use sh for older versions)
+          ;;
         busybox|busy-box)
           echo "::debug::busybox mode is not just normal sh."  # Easter egg
           SHELL_TYPE="--shell=busybox"
           ;;
-        busybox|busy-box)
-          echo "::debug::korny? sh. Shh!"  # Easter egg
-          SHELL_TYPE="--shell=busybox"
+        toybox|toy-box)
+          echo "::debug::not as busy? toy? sh. Shh!"  # Easter egg
+          SHELL_TYPE="--shell=toybox"  # requires tool version 3+
           ;;
         *)
           echo "::debug::No shell mode selected, will default to attempting to auto-detect."
@@ -224,7 +231,10 @@ runs:
       if: ${{ !cancelled() && (inputs.publish-artifacts == 'true') }}
 
     - name: "Upload SARIF file"
+      id: sarif-upload-step
       uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: shellcheck.sarif
+        token: ${{ github.token }}
+        category: 'shellcheck-scan'
       if: ${{ !cancelled() }}
