@@ -4,14 +4,14 @@
 
 ################################################################################
 # DO NOT REMOVE THIS COMMENT WHILE BUNDLED
-# This python code is released under MIT when considered as its own and (c) 2024 Mr. Walls.
+# This python code is released under MIT when considered as its own and (c) 2024-2026 Mr. Walls.
 #
 # Regarding this copy:
 # This code is re-released under GPLv3 when part of reactive-firewall/shellcheck-scan GHA as a
 # whole and is expressly noted here as being derived from the MIT version prior to inclusion
 # in the GHA project, where it is both
 # released under MIT License,
-# and concurently,
+# and concurrently,
 # included under the GPLv3 (see GPLv3 for details) when bundled as a full GHA.
 ################################################################################
 
@@ -21,13 +21,14 @@
 
 # ShellcheckCLI.py (Python Tool Wrapper)
 # ..................................
-# Copyright (c) 2024-2025, Mr. Walls
+# Copyright (c) 2024-2026, Mr. Walls
 # ..................................
 # Licensed under MIT (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 # ..........................................
-# https://www.github.com/reactive-firewall/multicast/LICENSE.md
+# https://github.com/reactive-firewall/multicast/LICENSE.md
+# or when bundled at: https://mit-license.org
 # ..........................................
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -114,9 +115,11 @@ class ShellCheckCLI:
 	SHELL_LANGUAGE_MAP = {
 		"bash": "bash",
 		"sh": "shell",
+		"ash": "shell",  # Almquist shell
 		"dash": "shell",
 		"ksh": "ksh",
-		"busybox": "shell"
+		"busybox": "shell",
+		"toybox": "shell"  # experimental
 	}
 
 	def __init__(self, shell: str, severity: str, files: List[str]):
@@ -274,7 +277,7 @@ class ShellCheckCLI:
 	def convert_to_sarif(self, shellcheck_results):
 		"""Convert shellcheck JSON results to SARIF format using sarif-om."""
 		sarif_log = sarif.SarifLog(
-			version="2.1.0",
+			version="3.0.0",
 			runs=[
 				sarif.Run(
 					tool=sarif.Tool(
@@ -460,7 +463,7 @@ class ShellCheckCLI:
 
 def main():
 	parser = argparse.ArgumentParser(description="Run ShellCheck and output results in SARIF format.")
-	parser.add_argument('--shell', choices=['bash', 'sh', 'dash', 'ksh', 'busybox'],
+	parser.add_argument('--shell', choices=ShellCheckCLI.SHELL_LANGUAGE_MAP.keys(),
 		default='bash', required=False, help="Specify the shell type.")
 	parser.add_argument('--severity', choices=['error', 'warning', 'info', 'style'],
 		default='style', help="Specify the severity level.")
