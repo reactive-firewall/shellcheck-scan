@@ -277,13 +277,13 @@ class ShellCheckCLI:
 	def convert_to_sarif(self, shellcheck_results):
 		"""Convert shellcheck JSON results to SARIF format using sarif-om."""
 		sarif_log = sarif.SarifLog(
-			version="3.0.0",
+			version="2.1.0",
 			runs=[
 				sarif.Run(
 					tool=sarif.Tool(
 						driver=sarif.ToolComponent(
 							name="ShellCheck",
-							version="0.7.2",  # Update to your ShellCheck version
+							version="0.9.0",  # Update to your ShellCheck version
 							information_uri="https://www.shellcheck.net/",
 							rules=[]
 						)
