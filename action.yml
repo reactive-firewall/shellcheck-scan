@@ -172,6 +172,7 @@ runs:
         ksh)
           echo "::debug::korny? sh. Shh!"  # Easter egg
           SHELL_TYPE="--shell=ksh"
+          ;;
         toybox|toy-box)
           echo "::debug::not as busy? toy? sh. Shh!"  # Easter egg
           SHELL_TYPE="--shell=sh"  # requires tool version 3+ (use sh for older versions)
