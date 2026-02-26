@@ -43,7 +43,7 @@ inputs:
       - default
   shell-format:
     description: |
-      Interpret shells as of a given variant. Can be BASH, POSIX, DASH, ASH, or BUSYBOX.
+      Interpret shells as of a given variant. Can be BASH, POSIX, DASH, KSH, ASH, or BUSYBOX.
       Default is automatic.
     required: false
     default: 'AUTOMATIC'
@@ -163,15 +163,18 @@ runs:
           SHELL_TYPE="--shell=dash"
           ;;
         ash)
-          SHELL_TYPE="--shell=ash"  # requires tool version 3+ (use sh for older versions)
+          SHELL_TYPE="--shell=sh"  # requires tool version 3+ (use sh for older versions)
           ;;
         busybox|busy-box)
           echo "::debug::busybox mode is not just normal sh."  # Easter egg
           SHELL_TYPE="--shell=busybox"
           ;;
+        ksh)
+          echo "::debug::korny? sh. Shh!"  # Easter egg
+          SHELL_TYPE="--shell=ksh"
         toybox|toy-box)
           echo "::debug::not as busy? toy? sh. Shh!"  # Easter egg
-          SHELL_TYPE="--shell=toybox"  # requires tool version 3+
+          SHELL_TYPE="--shell=sh"  # requires tool version 3+ (use sh for older versions)
           ;;
         *)
           echo "::debug::No shell mode selected, will default to attempting to auto-detect."

@@ -30,7 +30,7 @@ Add the following step to your workflow (most inputs are optional):
 
 ```yaml
 - name: Run ShellCheck Analysis
-  uses: reactive-firewall/shellcheck-scan@v1
+  uses: reactive-firewall/shellcheck-scan@v2
   with:
     # Optional: Specify exact path to scan (advanced feature)
     # To use a specific file, uncomment and set:
@@ -66,6 +66,7 @@ This action requires:
 - Required permissions:
   - `security-events: write` (for uploading SARIF results)
   - `contents: read` (for scanning repository contents)
+  - `artifact_metadata: write` (to optionally upload results for downloading _(configurable)_)
 
 ## Examples
 
@@ -83,8 +84,8 @@ jobs:
       security-events: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: reactive-firewall/shellcheck-scan@v1
+      - uses: actions/checkout@v6
+      - uses: reactive-firewall/shellcheck-scan@v2
 ```
 
 ### Full Usage
@@ -101,18 +102,18 @@ jobs:
   shellcheck:
     permissions:
       contents: read  # for actions/checkout to fetch code
-      pull_requests: read  # to get PR metadata
+      pull_requests: read  # optional - to get PR metadata
       security-events: write  # for github/codeql-action/upload-sarif to upload SARIF results
 
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
           submodules: true
       - name: Shellcheck Scan
-        uses: reactive-firewall/shellcheck-scan@v1
+        uses: reactive-firewall/shellcheck-scan@v2
         with:  # optional arguments
           match: 'scripts/* **/*.sh'
           publish-artifacts: false
@@ -122,7 +123,7 @@ jobs:
 ### Custom Configuration
 
 ```yaml
-- uses: reactive-firewall/shellcheck-scan@v1
+- uses: reactive-firewall/shellcheck-scan@v2
   with:
     severity: 'warning'
     shell-format: 'bash'
@@ -143,4 +144,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 If you encounter any problems, please file an issue along with a detailed description.
 
 ---
-Last Updated: 2025-04-28
+Last Updated: 2026-02-25
