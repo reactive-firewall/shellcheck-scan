@@ -60,6 +60,14 @@ inputs:
     type: boolean
     default: true
     required: true
+  keep-artifacts:
+    description: |
+      SECURITY OVERRIDE - USE AT OWN RISK - Disables mitigations for CWE-910 - Also leave SARIF
+      results on runner after upload. (Unless you have a very good reason, you should leave this
+      alone)'
+    type: boolean
+    default: false
+    required: true
 outputs:
   python-version:
     description: "The python version that was used in the run."
@@ -242,3 +250,16 @@ runs:
         token: ${{ github.token }}  # i.e. use runner token to match GitHub instance in GHES
         category: 'shellcheck-scan'
       if: ${{ !cancelled() }}
+
+    - name: "Disavow artifact"
+      id: artifact-cleanup-step
+      shell: bash
+      run: |
+        echo "::group::CWE-910 Mitigation"
+        { rm -f shellcheck.sarif || true ; \
+        touch shellcheck.sarif || true ; \
+        echo "null" >shellcheck.sarif || true ; \
+        ls -1 shellcheck.sarif || wait ; \
+        rm -f shellcheck.sarif || true ; } 2>/dev/null >> /dev/null ; # ignore all output
+        echo "::endgroup::"
+      if: ${{ always() && !(inputs.keep-artifacts == 'true') }}
