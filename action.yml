@@ -244,7 +244,7 @@ runs:
 
     - name: "Upload SARIF file"
       id: sarif-upload-step
-      uses: github/codeql-action/upload-sarif@v4
+      uses: github/codeql-action/upload-sarif@v4.37.4
       with:
         sarif_file: shellcheck.sarif
         token: ${{ github.token }}  # i.e. use runner token to match GitHub instance in GHES
